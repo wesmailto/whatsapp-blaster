@@ -1,0 +1,22 @@
+{
+  "groups": [
+    "teste grupo"
+  ],
+  "message": "testing message - updated",
+  "dedup": {
+    "enabled": false,
+    "mode": "forever"
+  },
+  "schedule": {
+    "description": "Managed via Cowork scheduled tasks",
+    "last_updated": "2026-04-02T14:55:45.841Z",
+    "freq": "weekly",
+    "day": "4",
+    "time": "11:41",
+    "cron": "41 11 * * 4"
+  },
+  "settings": {
+    "delay_between_messages_seconds": 10,
+    "skip_self": false
+  }
+}

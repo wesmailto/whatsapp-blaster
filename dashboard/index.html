@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WhatsApp Blaster</title>
+  <style>
+    :root {
+      --green:#16a34a; --green-dk:#15803d; --green-lt:#f0fdf4;
+      --bg:#f4f5f7; --surface:#fff; --text:#111827; --muted:#6b7280;
+      --border:#e5e7eb; --danger:#dc2626; --warn:#d97706; --info:#2563eb;
+      --r:8px; --sh:0 1px 3px rgba(0,0,0,.06),0 1px 8px rgba(0,0,0,.04);
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+    /* Header */
+    header{background:var(--surface);color:var(--text);padding:0 28px;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--border);height:56px;position:sticky;top:0;z-index:50}
+    header h1{font-size:16px;font-weight:700;letter-spacing:-.3px}
+    header .sub{font-size:12px;color:var(--muted);margin-top:1px}
+    .hright{margin-left:auto;display:flex;align-items:center;gap:10px}
+    .pill{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg)}
+    .dot{width:7px;height:7px;border-radius:50%;background:var(--muted)}
+    .dot.pulse{background:var(--green);animation:pulse 2s infinite}
+    .dot.off{background:#d1d5db}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+    /* Wizard steps */
+    .steps-nav{background:var(--surface);border-bottom:1px solid var(--border);padding:0 28px;display:flex;gap:0;overflow-x:auto}
+    .step-tab{display:flex;align-items:center;gap:8px;padding:13px 18px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:color .15s,border-color .15s;user-select:none}
+    .step-tab:hover{color:var(--text)}
+    .step-tab.active{color:var(--green-dk);border-bottom-color:var(--green)}
+    .step-tab.done .step-num{background:var(--green);color:#fff;border-color:var(--green)}
+    .step-tab.active .step-num{background:var(--green);color:#fff;border-color:var(--green)}
+    .step-num{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;color:var(--muted);transition:all .15s}
+
+    /* Pages */
+    .page{display:none;padding:24px 28px 80px;max-width:820px;margin:0 auto}
+    .page.active{display:block}
+
+    /* Cards */
+    .card{background:var(--surface);border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--sh);overflow:hidden;margin-bottom:16px}
+    .card-h{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .card-h h2{font-size:13px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px}
+    .card-b{padding:20px}
+
+    /* Buttons — one uniform size */
+    .btn{padding:8px 16px;border-radius:6px;font-size:13px;font-weight:500;line-height:1.25;cursor:pointer;border:1px solid transparent;transition:background .15s,color .15s,border-color .15s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+    .btn-primary{background:var(--green);color:#fff;border-color:var(--green)}.btn-primary:hover{background:var(--green-dk);border-color:var(--green-dk)}
+    .btn-secondary{background:var(--surface);color:var(--text);border-color:var(--border)}.btn-secondary:hover{background:var(--bg)}
+    .btn-danger{background:var(--surface);color:var(--danger);border-color:#fca5a5}.btn-danger:hover{background:#fef2f2}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .btn-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:18px}
+
+    /* Step 1 — Connect */
+    .connect-layout{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center}
+    .qr-box{background:var(--bg);border-radius:var(--r);padding:20px;text-align:center;border:1px solid var(--border)}
+    .qr-box img{width:200px;height:200px;border-radius:6px;margin:0 auto 12px;display:block}
+    .qr-placeholder{width:200px;height:200px;background:#fff;border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;color:var(--muted);font-size:13px}
+    .status-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600}
+    .status-badge.disconnected{background:#fef2f2;color:#991b1b}
+    .status-badge.qr_ready{background:#fffbeb;color:#92400e}
+    .status-badge.connecting{background:#eff6ff;color:#1e40af}
+    .status-badge.ready{background:var(--green-lt);color:var(--green-dk)}
+    .connect-info h3{font-size:17px;font-weight:700;margin-bottom:8px}
+    .connect-info p{font-size:14px;color:var(--muted);line-height:1.6;margin-bottom:8px}
+    .connect-steps{margin:14px 0;display:flex;flex-direction:column;gap:10px}
+    .cstep{display:flex;gap:12px;align-items:flex-start;font-size:14px}
+    .cstep-n{width:22px;height:22px;border-radius:50%;background:var(--green);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+
+    /* Step 2 — Groups */
+    .groups-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+    .groups-search{flex:1;min-width:180px;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:14px;outline:none;font-family:inherit;background:var(--bg)}
+    .groups-search:focus{border-color:var(--green);background:#fff}
+    .groups-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:12px}
+    .group-check{border:1px solid var(--border);border-radius:6px;padding:11px 13px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:border-color .15s,background .15s;user-select:none;background:#fff}
+    .group-check:hover{border-color:var(--green);background:var(--green-lt)}
+    .group-check.selected{border-color:var(--green);background:var(--green-lt)}
+    .group-check-icon{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;font-size:11px}
+    .group-check.selected .group-check-icon{background:var(--green);border-color:var(--green);color:#fff}
+    .group-name{font-size:13px;font-weight:500;line-height:1.3}
+    .group-count{font-size:11px;color:var(--muted);margin-top:2px}
+    .groups-loading{text-align:center;padding:32px;color:var(--muted);font-size:14px}
+    .groups-empty{text-align:center;padding:32px;color:var(--muted);font-size:14px}
+    /* Pagination */
+    .pagination{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;flex-wrap:wrap}
+    .pag-info{font-size:12px;color:var(--muted)}
+    .pag-btns{display:flex;gap:4px;align-items:center}
+    .pag-btn{min-width:30px;height:30px;border-radius:6px;border:1px solid var(--border);background:#fff;cursor:pointer;font-size:12px;font-weight:600;color:var(--text);display:flex;align-items:center;justify-content:center;padding:0 6px;transition:all .15s}
+    .pag-btn:hover{border-color:var(--green);color:var(--green-dk)}
+    .pag-btn.active{background:var(--green);color:#fff;border-color:var(--green)}
+    .pag-btn:disabled{opacity:.4;cursor:not-allowed}
+
+    /* Step 3 — Message */
+    label.lbl{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px}
+    textarea,input[type=text],input[type=number],input[type=time],select{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;font-size:14px;color:var(--text);background:#fff;outline:none;font-family:inherit;transition:border-color .15s}
+    textarea:focus,input:focus,select:focus{border-color:var(--green)}
+    textarea{resize:vertical;min-height:150px;line-height:1.6}
+    .char-hint{font-size:12px;color:var(--muted);margin-top:4px}
+    /* Formatting toolbar */
+    .fmt-toolbar{display:flex;align-items:center;gap:3px;padding:5px 7px;background:var(--bg);border:1px solid var(--border);border-bottom:none;border-radius:6px 6px 0 0;flex-wrap:wrap}
+    .fmt-btn{width:28px;height:26px;border:none;background:transparent;border-radius:4px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:background .1s,color .1s}
+    .fmt-btn:hover{background:var(--border);color:var(--text)}
+    .fmt-sep{width:1px;height:16px;background:var(--border);margin:0 3px}
+    #msgInput{border-radius:0 0 6px 6px!important;border-top:none!important}
+    /* Emoji picker */
+    .emoji-wrap{position:relative}
+    .emoji-panel{display:none;position:absolute;top:32px;left:0;background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px;z-index:50;box-shadow:0 4px 16px rgba(0,0,0,.1);width:256px}
+    .emoji-panel.open{display:block}
+    .emoji-grid{display:flex;flex-wrap:wrap;gap:3px}
+    .emoji-item{font-size:19px;cursor:pointer;padding:4px;border-radius:4px;line-height:1;transition:background .1s}
+    .emoji-item:hover{background:var(--bg)}
+    /* Preview */
+    .msg-preview{background:var(--green-lt);border:1px solid #bbf7d0;border-radius:0 8px 8px 8px;padding:12px 14px;font-size:14px;line-height:1.7;max-width:340px;margin-top:12px;white-space:pre-wrap;word-break:break-word}
+    .msg-preview b{font-weight:700}
+    .msg-preview i{font-style:italic}
+    .msg-preview s{text-decoration:line-through}
+    .msg-preview code{font-family:monospace;background:rgba(0,0,0,.06);padding:0 3px;border-radius:3px}
+    .msg-preview-label{font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+
+    /* Step 4 — Schedule */
+    .sched-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+    .form-row{margin-bottom:14px}
+    .form-row:last-child{margin-bottom:0}
+    .sched-hint{background:var(--bg);border-radius:6px;padding:10px 14px;font-size:13px;color:var(--muted);margin-top:12px;border:1px solid var(--border)}
+    .sched-hint strong{color:var(--text)}
+
+    /* Step 5 — Launch */
+    .summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
+    .summary-item{background:var(--bg);border-radius:6px;padding:12px 14px;border:1px solid var(--border)}
+    .summary-item .s-label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+    .summary-item .s-val{font-size:14px;font-weight:600}
+    .s-val.ok{color:var(--green-dk)}
+    .s-val.warn{color:var(--warn)}
+    .launch-btn-wrap{padding:16px 0 4px}
+    .run-status{background:var(--bg);border-radius:8px;border:1px solid var(--border);padding:14px;text-align:center;margin-top:14px;display:none}
+    .run-status.show{display:block}
+    .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-right:7px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* Run history */
+    .run-entry{border-bottom:1px solid var(--border);font-size:14px}
+    .run-entry:last-child{border-bottom:none}
+    .run-header{display:flex;align-items:center;gap:10px;padding:12px 0;cursor:pointer;user-select:none}
+    .run-header:hover .run-toggle{color:var(--text)}
+    .run-meta{display:flex;align-items:center;gap:10px;flex:1;flex-wrap:wrap}
+    .tag{font-weight:600;font-size:11px;padding:2px 7px;border-radius:4px}
+    .tag-run{background:var(--green-lt);color:var(--green-dk);border:1px solid #bbf7d0}
+    .tag-clear{background:#fffbeb;color:#854d0e;border:1px solid #fde68a}
+    .run-time{font-size:12px;color:var(--muted)}
+    .run-summary{font-size:12px;color:var(--muted);margin-left:auto}
+    .run-toggle{font-size:14px;color:var(--muted);transition:transform .2s;flex-shrink:0;line-height:1}
+    .run-toggle.open{transform:rotate(90deg)}
+    .run-body{display:none;padding:0 0 14px 0}
+    .run-body.open{display:block}
+    .run-notes{font-size:13px;color:var(--muted);margin-bottom:10px;font-style:italic}
+    .contacts-grid{display:flex;flex-wrap:wrap;gap:5px}
+    .contact-chip{border-radius:4px;padding:3px 10px;font-size:12px;font-family:monospace;display:inline-flex;align-items:center;gap:5px}
+    .chip-sent{background:var(--green-lt);border:1px solid #bbf7d0;color:#166534}
+    .chip-skipped{background:var(--bg);border:1px solid var(--border);color:var(--muted)}
+    .chip-reason{font-size:10px;background:rgba(0,0,0,.07);border-radius:3px;padding:1px 5px;font-family:sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+    .log-empty{text-align:center;color:var(--muted);font-size:14px;padding:24px 0}
+
+    /* Section label inside run body */
+    .section-label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px}
+
+    /* Stats */
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+    .sc{background:var(--surface);border-radius:var(--r);border:1px solid var(--border);padding:14px 16px;box-shadow:var(--sh);text-align:center}
+    .sc .n{font-size:24px;font-weight:700;color:var(--text)}
+    .sc .l{font-size:11px;color:var(--muted);margin-top:3px;text-transform:uppercase;letter-spacing:.4px}
+
+    /* Toast */
+    #toast{position:fixed;bottom:20px;right:20px;background:#1f2937;color:#fff;padding:10px 18px;border-radius:7px;font-size:13px;transform:translateY(70px);opacity:0;transition:all .25s;z-index:200;max-width:320px}
+    #toast.show{transform:translateY(0);opacity:1}
+    #toast.ok{background:var(--green-dk)}
+    #toast.err{background:var(--danger)}
+
+    @media(max-width:640px){
+      .connect-layout{grid-template-columns:1fr}
+      .sched-grid{grid-template-columns:1fr}
+      .summary-grid{grid-template-columns:1fr}
+      .stats{grid-template-columns:1fr 1fr}
+      .steps-nav{padding:0 8px}
+      .step-tab{padding:11px 10px;font-size:12px}
+      .page{padding:16px 16px 80px}
+    }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div>
+    <h1>WhatsApp Blaster</h1>
+    <div class="sub">Automated group member outreach</div>
+  </div>
+  <div class="hright">
+    <div class="pill"><div class="dot off" id="hDot"></div><span id="hStatus">Connecting…</span></div>
+  </div>
+</header>
+
+<!-- Wizard tabs -->
+<div class="steps-nav" id="stepsNav">
+  <div class="step-tab active" data-step="1" onclick="goStep(1)"><div class="step-num">1</div> Connect</div>
+  <div class="step-tab" data-step="2" onclick="goStep(2)"><div class="step-num">2</div> Groups</div>
+  <div class="step-tab" data-step="3" onclick="goStep(3)"><div class="step-num">3</div> Message</div>
+  <div class="step-tab" data-step="4" onclick="goStep(4)"><div class="step-num">4</div> Launch</div>
+</div>
+
+<!-- ─────────────────────────────────────────────────────────────────────────── -->
+<!-- STEP 1: Connect -->
+<div class="page active" id="page-1">
+  <div class="card">
+    <div class="card-h"><h2>Connect WhatsApp</h2><span class="status-badge disconnected" id="waBadge">Disconnected</span></div>
+    <div class="card-b">
+      <div class="connect-layout">
+        <div class="qr-box">
+          <div id="qrWrap">
+            <div class="qr-placeholder" id="qrPlaceholder">
+              <span id="qrMsg">Loading…</span>
+            </div>
+          </div>
+          <button class="btn btn-secondary" style="margin-top:10px" onclick="refreshQR()">Refresh QR</button>
+        </div>
+        <div class="connect-info">
+          <h3 id="connectTitle">Link your WhatsApp</h3>
+          <p id="connectDesc">Scan the QR code on the left with your phone to link this dashboard to your WhatsApp account. This is a one-time setup — once connected, your session is saved.</p>
+          <div class="connect-steps" id="connectSteps">
+            <div class="cstep"><div class="cstep-n">1</div><span>Open <strong>WhatsApp</strong> on your phone</span></div>
+            <div class="cstep"><div class="cstep-n">2</div><span>Go to <strong>Settings → Linked Devices → Link a Device</strong></span></div>
+            <div class="cstep"><div class="cstep-n">3</div><span>Point your camera at the QR code on the left</span></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="nextFromConnect" onclick="goStep(2)" disabled>Next: Select Groups</button>
+            <button class="btn btn-danger" id="btnLogout" onclick="logout()" style="display:none">Log out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────────────────────────────────────────────────────────────────────── -->
+<!-- STEP 2: Groups -->
+<div class="page" id="page-2">
+  <div class="card">
+    <div class="card-h">
+      <h2>Target Groups</h2>
+      <button class="btn btn-secondary" onclick="loadGroups(true)">Refresh</button>
+    </div>
+    <div class="card-b">
+      <p style="font-size:14px;color:var(--muted);margin-bottom:14px">Select the groups whose members you want to message. All participants will receive your DM.</p>
+      <div class="groups-toolbar">
+        <input class="groups-search" id="groupSearch" type="text" placeholder="Search groups…" oninput="onGroupSearch()" />
+        <span id="selectedCount" style="font-size:13px;color:var(--muted);white-space:nowrap"></span>
+      </div>
+      <div id="groupsContainer" class="groups-loading">Loading your groups…</div>
+      <div id="groupsPagination" class="pagination" style="display:none"></div>
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn btn-primary" onclick="saveGroupsAndNext()">Save & Next: Message</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────────────────────────────────────────────────────────────────────── -->
+<!-- STEP 3: Message -->
+<div class="page" id="page-3">
+  <div class="card">
+    <div class="card-h"><h2>Your Message</h2></div>
+    <div class="card-b">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+        <div>
+          <label class="lbl">Message text</label>
+          <!-- Formatting toolbar -->
+          <div class="fmt-toolbar">
+            <button class="fmt-btn" title="Bold (*text*)" onclick="applyFmt('*')"><b>B</b></button>
+            <button class="fmt-btn" title="Italic (_text_)" onclick="applyFmt('_')"><i>I</i></button>
+            <button class="fmt-btn" title="Strikethrough (~text~)" onclick="applyFmt('~')"><s>S</s></button>
+            <button class="fmt-btn" title="Monospace (```text```)" onclick="applyFmt('```')"><code style="font-size:11px">{ }</code></button>
+            <div class="fmt-sep"></div>
+            <button class="fmt-btn" title="New line" onclick="applyNewline()">&#8629;</button>
+            <div class="fmt-sep"></div>
+            <div class="emoji-wrap">
+              <button class="fmt-btn" title="Emoji" onclick="toggleEmoji(event)" id="emojiBtn">:)</button>
+              <div class="emoji-panel" id="emojiPanel">
+                <div class="emoji-grid" id="emojiGrid"></div>
+              </div>
+            </div>
+            <div style="margin-left:auto;font-size:12px;color:var(--muted)">
+              <span id="charCount">0</span> chars
+            </div>
+          </div>
+          <textarea id="msgInput" placeholder="Hi! I wanted to reach out personally…" oninput="updatePreview()"></textarea>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="saveMsgAndNext()">Save & Next: Launch</button>
+          </div>
+        </div>
+        <div>
+          <div class="msg-preview-label">WhatsApp Preview</div>
+          <div class="msg-preview" id="msgPreview">Your message will appear here…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────────────────────────────────────────────────────────────────────── -->
+<!-- STEP 4: Launch -->
+<div class="page" id="page-4">
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="sc"><div class="n" id="sGroups">—</div><div class="l">Groups</div></div>
+    <div class="sc"><div class="n" id="sSent">—</div><div class="l">Messaged</div></div>
+    <div class="sc"><div class="n" id="sRuns">—</div><div class="l">Runs</div></div>
+    <div class="sc"><div class="n" id="sLast">—</div><div class="l">Last Run</div></div>
+  </div>
+
+  <!-- Send Now -->
+  <div class="card">
+    <div class="card-h"><h2>Send Now</h2></div>
+    <div class="card-b">
+      <div class="summary-grid" style="margin-bottom:18px">
+        <div class="summary-item">
+          <div class="s-label">WhatsApp</div>
+          <div class="s-val" id="sumWa">—</div>
+        </div>
+        <div class="summary-item">
+          <div class="s-label">Target Groups</div>
+          <div class="s-val" id="sumGroups">—</div>
+        </div>
+        <div class="summary-item">
+          <div class="s-label">Message</div>
+          <div class="s-val" id="sumMsg">—</div>
+        </div>
+        <div class="summary-item">
+          <div class="s-label">Contacts messaged so far</div>
+          <div class="s-val" id="sumSent">—</div>
+        </div>
+      </div>
+      <div class="launch-btn-wrap" style="padding:0 0 4px">
+        <button class="btn btn-primary" id="btnLaunch" onclick="launch()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          Send Now
+        </button>
+      </div>
+      <div class="run-status" id="runStatus">
+        <span class="spinner"></span><span id="runMsg">Sending messages…</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Schedule -->
+  <div class="card">
+    <div class="card-h"><h2>Schedule</h2></div>
+    <div class="card-b">
+      <div class="sched-grid" style="margin-bottom:12px">
+        <div class="form-row" style="margin:0">
+          <label class="lbl">Frequency</label>
+          <select id="schedFreq" onchange="onFreqChange(); updateSchedLabel()">
+            <option value="manual">Manual only</option>
+            <option value="daily">Daily</option>
+            <option value="weekly" selected>Weekly</option>
+            <option value="monthly">Monthly (1st)</option>
+          </select>
+        </div>
+        <div class="form-row" style="margin:0" id="schedDayRow">
+          <label class="lbl">Day</label>
+          <select id="schedDay" onchange="updateSchedLabel()">
+            <option value="1" selected>Monday</option>
+            <option value="2">Tuesday</option>
+            <option value="3">Wednesday</option>
+            <option value="4">Thursday</option>
+            <option value="5">Friday</option>
+            <option value="6">Saturday</option>
+            <option value="0">Sunday</option>
+          </select>
+        </div>
+        <div class="form-row" style="margin:0">
+          <label class="lbl">Time</label>
+          <input type="time" id="schedTime" value="09:00" onchange="updateSchedLabel()" />
+        </div>
+      </div>
+      <div class="sched-hint">
+        <strong>Next run:</strong> <span id="schedLabel">Every Monday at 9:00 AM</span>
+      </div>
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn btn-primary" onclick="saveSched()">Save Schedule</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="card">
+    <div class="card-h"><h2>Settings</h2></div>
+    <div class="card-b">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer;padding:10px 13px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">
+          <input type="checkbox" id="dedupToggle" checked /> Skip already-messaged contacts
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer;padding:10px 13px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">
+          <input type="checkbox" id="skipSelfToggle" checked /> Skip myself
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer;padding:10px 13px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">
+          Delay between messages:&nbsp;<input type="number" id="delayInput" value="3" min="1" max="30" style="width:50px" /> sec
+        </label>
+      </div>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn btn-secondary" onclick="saveSettings()">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="card">
+    <div class="card-h">
+      <h2>Run History</h2>
+      <button class="btn btn-danger" onclick="clearLog()">Clear Sent Log</button>
+    </div>
+    <div class="card-b" style="padding:8px 20px">
+      <div id="runLog"></div>
+    </div>
+  </div>
+</div>
+
+<footer style="position:fixed;bottom:0;left:0;right:0;text-align:center;padding:9px 16px;font-size:12px;color:var(--muted);background:var(--surface);border-top:1px solid var(--border);z-index:99">
+  Developed by <a href="https://github.com/wesmailto" target="_blank" style="color:var(--muted);text-decoration:none;font-weight:600">@wesmailto</a> · <a href="mailto:wesmailto@gmail.com" style="color:var(--muted);text-decoration:none">wesmailto@gmail.com</a> · All rights reserved © 2026
+</footer>
+
+<div id="toast"></div>
+
+<script>
+const API = 'http://localhost:5050/api';
+let waStatus = 'disconnected';
+let allGroups     = [];   // full list from server (loaded once)
+let filteredGroups = [];  // allGroups filtered by search query (client-side)
+let selectedGroupIds = new Set();
+let groupsPage = 1;
+let groupsSearchQ = '';
+let groupsSearchTimer = null;
+const GROUPS_PER_PAGE = 12;
+let config = {};
+let pollTimer;
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+  try {
+    config = await fetch(`${API}/config`).then(r => r.json());
+    restoreFromConfig();
+  } catch {}
+  pollWaStatus();
+  setInterval(pollWaStatus, 4000);
+}
+
+function restoreFromConfig() {
+  if (config.message)  { document.getElementById('msgInput').value = config.message; updatePreview(); }
+  if (config.schedule?.freq)  document.getElementById('schedFreq').value = config.schedule.freq;
+  if (config.schedule?.day)   document.getElementById('schedDay').value  = config.schedule.day;
+  if (config.schedule?.time)  document.getElementById('schedTime').value = config.schedule.time;
+  if (config.dedup)    document.getElementById('dedupToggle').checked    = config.dedup.enabled !== false;
+  if (config.settings) {
+    document.getElementById('skipSelfToggle').checked = config.settings.skip_self !== false;
+    document.getElementById('delayInput').value       = config.settings.delay_between_messages_seconds ?? 3;
+  }
+  onFreqChange(); updateSchedLabel();
+}
+
+// ── WA status polling ─────────────────────────────────────────────────────────
+async function pollWaStatus() {
+  try {
+    const s = await fetch(`${API}/wa/status`).then(r => r.json());
+    waStatus = s.status;
+    updateWaBadge(s.status);
+
+    // Header dot
+    const dot = document.getElementById('hDot');
+    const lbl = document.getElementById('hStatus');
+    if (s.status === 'ready') {
+      dot.className = 'dot pulse'; lbl.textContent = 'Connected';
+    } else {
+      dot.className = 'dot off';
+      lbl.textContent = s.status === 'qr_ready' ? 'Scan QR' : s.status === 'connecting' ? 'Connecting…' : 'Disconnected';
+    }
+
+    // QR
+    if (s.status === 'qr_ready') await fetchQR();
+    else if (s.status === 'ready') {
+      document.getElementById('qrWrap').innerHTML = '<div style="font-size:13px;color:var(--green-dk);font-weight:600;padding:16px 0">WhatsApp connected</div>';
+      document.getElementById('nextFromConnect').disabled = false;
+      document.getElementById('btnLogout').style.display = '';
+      document.getElementById('connectTitle').textContent = 'You\'re connected';
+      document.getElementById('connectDesc').textContent  = 'Your WhatsApp is linked. The session is saved — you won\'t need to scan again next time.';
+      document.getElementById('connectSteps').style.display = 'none';
+      markDone(1);
+    } else {
+      document.getElementById('qrPlaceholder').querySelector('#qrMsg').textContent =
+        s.status === 'connecting' ? 'Connecting…' : 'Starting…';
+    }
+  } catch {
+    document.getElementById('hStatus').textContent = 'Server offline';
+    document.getElementById('hDot').className = 'dot off';
+  }
+}
+
+function updateWaBadge(status) {
+  const b = document.getElementById('waBadge');
+  const labels = { disconnected:'Disconnected', qr_ready:'Scan QR code', connecting:'Connecting…', ready:'Connected' };
+  b.className = `status-badge ${status}`;
+  b.textContent = labels[status] || status;
+}
+
+async function fetchQR() {
+  try {
+    const d = await fetch(`${API}/wa/qr`).then(r => r.json());
+    if (d.qr) {
+      document.getElementById('qrWrap').innerHTML = `<img src="${d.qr}" alt="QR Code" />`;
+    }
+  } catch {}
+}
+
+async function refreshQR() {
+  document.getElementById('qrWrap').innerHTML = `<div class="qr-placeholder"><span>Refreshing…</span></div>`;
+  await fetchQR();
+}
+
+// ── Step nav ──────────────────────────────────────────────────────────────────
+let currentStep = 1;
+function goStep(n) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(`page-${n}`).classList.add('active');
+  document.querySelectorAll('.step-tab').forEach(t => {
+    const s = parseInt(t.dataset.step);
+    t.classList.toggle('active', s === n);
+  });
+  currentStep = n;
+  if (n === 2) {
+    groupsPage = 1; groupsSearchQ = '';
+    document.getElementById('groupSearch').value = '';
+    loadGroups();
+  }
+  if (n === 4) loadLaunchPage();
+}
+
+function markDone(n) {
+  const tab = document.querySelector(`.step-tab[data-step="${n}"]`);
+  if (tab) tab.classList.add('done');
+}
+
+// ── Groups ────────────────────────────────────────────────────────────────────
+
+// Load ALL groups once from server, cache in allGroups, filter/paginate client-side
+async function loadGroups(force = false) {
+  const c   = document.getElementById('groupsContainer');
+  const pag = document.getElementById('groupsPagination');
+
+  // Only show spinner on first load or forced refresh (not on search/page change)
+  if (force || !allGroups.length) {
+    c.className = 'groups-loading';
+    c.innerHTML = '<div class="spinner" style="width:24px;height:24px;border-width:2px;display:inline-block"></div><br><br>Loading your groups…';
+    pag.style.display = 'none';
+
+    try {
+      const url = `${API}/wa/groups?limit=500${force ? '&force=1' : ''}`;
+      const d   = await fetch(url).then(r => r.json());
+      allGroups = d.groups || [];
+
+      // Pre-select groups saved in config (match by name)
+      const saved = config.groups || [];
+      allGroups.forEach(g => { if (saved.includes(g.name)) selectedGroupIds.add(g.id); });
+    } catch {
+      c.innerHTML = 'Could not load groups. Make sure the server is running.';
+      return;
+    }
+  }
+
+  applyFilterAndRender();
+}
+
+// Client-side filter + paginate — instant, no server round-trip
+function applyFilterAndRender() {
+  const c   = document.getElementById('groupsContainer');
+  const pag = document.getElementById('groupsPagination');
+  const q   = groupsSearchQ.toLowerCase();
+
+  filteredGroups = q
+    ? allGroups.filter(g => g.name.toLowerCase().includes(q))
+    : allGroups;
+
+  const total = filteredGroups.length;
+  const pages = Math.ceil(total / GROUPS_PER_PAGE) || 1;
+  if (groupsPage > pages) groupsPage = 1;
+
+  if (!total) {
+    c.className = 'groups-empty';
+    c.innerHTML = q
+      ? `No groups match "<strong>${esc(groupsSearchQ)}</strong>"`
+      : waStatus === 'ready'
+        ? 'No groups found. You need to be in at least one WhatsApp group.'
+        : 'Connect WhatsApp first (Step 1) to see your groups.';
+    pag.style.display = 'none';
+    return;
+  }
+
+  // Render current page
+  const start   = (groupsPage - 1) * GROUPS_PER_PAGE;
+  const pageItems = filteredGroups.slice(start, start + GROUPS_PER_PAGE);
+
+  c.className = 'groups-grid';
+  c.innerHTML = pageItems.map(g => {
+    const isSel = selectedGroupIds.has(g.id);
+    return `
+    <div class="group-check ${isSel ? 'selected' : ''}" onclick="toggleGroup('${esc(g.id)}','${esc(g.name)}')">
+      <div class="group-check-icon">${isSel ? '✓' : ''}</div>
+      <div>
+        <div class="group-name">${esc(g.name)}</div>
+        <div class="group-count">${g.participants} participant${g.participants !== 1 ? 's' : ''}</div>
+      </div>
+    </div>`;
+  }).join('');
+  updateSelectedCount();
+
+  // Pagination
+  if (pages <= 1) { pag.style.display = 'none'; return; }
+  pag.style.display = 'flex';
+  const end = Math.min(groupsPage * GROUPS_PER_PAGE, total);
+  const pageNums = [];
+  const w = 2;
+  for (let p = 1; p <= pages; p++) {
+    if (p === 1 || p === pages || (p >= groupsPage - w && p <= groupsPage + w)) pageNums.push(p);
+    else if (pageNums[pageNums.length - 1] !== '…') pageNums.push('…');
+  }
+  pag.innerHTML = `
+    <span class="pag-info">Showing ${start + 1}–${end} of ${total} group${total !== 1 ? 's' : ''}</span>
+    <div class="pag-btns">
+      <button class="pag-btn" onclick="changePage(${groupsPage - 1})" ${groupsPage === 1 ? 'disabled' : ''}>‹</button>
+      ${pageNums.map(p => p === '…'
+        ? `<span style="padding:0 4px;color:var(--muted)">…</span>`
+        : `<button class="pag-btn ${p === groupsPage ? 'active' : ''}" onclick="changePage(${p})">${p}</button>`
+      ).join('')}
+      <button class="pag-btn" onclick="changePage(${groupsPage + 1})" ${groupsPage === pages ? 'disabled' : ''}>›</button>
+    </div>`;
+}
+
+function changePage(p) {
+  groupsPage = p;
+  applyFilterAndRender();
+  document.getElementById('groupsContainer').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function onGroupSearch() {
+  clearTimeout(groupsSearchTimer);
+  groupsSearchTimer = setTimeout(() => {
+    groupsSearchQ = document.getElementById('groupSearch').value.trim();
+    groupsPage = 1;
+    applyFilterAndRender(); // instant — no server call
+  }, 200);
+}
+
+function toggleGroup(id, name) {
+  if (selectedGroupIds.has(id)) {
+    selectedGroupIds.delete(id);
+    config.groups = (config.groups || []).filter(n => n !== name);
+  } else {
+    selectedGroupIds.add(id);
+  }
+  applyFilterAndRender();
+}
+
+function updateSelectedCount() {
+  document.getElementById('selectedCount').textContent =
+    selectedGroupIds.size ? `${selectedGroupIds.size} group${selectedGroupIds.size>1?'s':''} selected` : '';
+}
+
+async function saveGroupsAndNext() {
+  const names = allGroups.filter(g => selectedGroupIds.has(g.id)).map(g => g.name);
+  if (!names.length) { showToast('Select at least one group.', 'err'); return; }
+  await putConfig({ groups: names });
+  config.groups = names;
+  markDone(2);
+  showToast('Groups saved', 'ok');
+  goStep(3);
+}
+
+// ── Message & Formatting ──────────────────────────────────────────────────────
+const EMOJIS = ['😊','😀','😂','🙌','👏','🔥','💡','✅','❤️','🚀','👍','🎉','💪','🙏','⭐','📢','📌','💬','📞','🤝','👋','😎','🥳','💼','📊','🎯','⚡','🌟','💰','📝'];
+
+function buildEmojiGrid() {
+  document.getElementById('emojiGrid').innerHTML =
+    EMOJIS.map(e => `<span class="emoji-item" onclick="insertEmoji('${e}')">${e}</span>`).join('');
+}
+
+function toggleEmoji(e) {
+  e.stopPropagation();
+  const p = document.getElementById('emojiPanel');
+  if (!p.classList.contains('open')) buildEmojiGrid();
+  p.classList.toggle('open');
+}
+
+function insertEmoji(em) {
+  const ta = document.getElementById('msgInput');
+  const s = ta.selectionStart, end = ta.selectionEnd;
+  ta.value = ta.value.slice(0, s) + em + ta.value.slice(end);
+  ta.selectionStart = ta.selectionEnd = s + em.length;
+  ta.focus();
+  document.getElementById('emojiPanel').classList.remove('open');
+  updatePreview();
+}
+
+document.addEventListener('click', () => {
+  const p = document.getElementById('emojiPanel');
+  if (p) p.classList.remove('open');
+});
+
+function applyFmt(marker) {
+  const ta  = document.getElementById('msgInput');
+  const s   = ta.selectionStart;
+  const end = ta.selectionEnd;
+  const sel = ta.value.slice(s, end);
+  const val = ta.value;
+
+  // Toggle: if already wrapped, unwrap; otherwise wrap
+  const before = val.slice(s - marker.length, s);
+  const after  = val.slice(end, end + marker.length);
+  if (before === marker && after === marker) {
+    // Unwrap
+    ta.value = val.slice(0, s - marker.length) + sel + val.slice(end + marker.length);
+    ta.selectionStart = s - marker.length;
+    ta.selectionEnd   = end - marker.length;
+  } else {
+    // Wrap selection (or insert markers around cursor)
+    const replacement = marker + (sel || '') + marker;
+    ta.value = val.slice(0, s) + replacement + val.slice(end);
+    ta.selectionStart = s + marker.length;
+    ta.selectionEnd   = s + marker.length + (sel ? sel.length : 0);
+  }
+  ta.focus();
+  updatePreview();
+}
+
+function applyNewline() {
+  const ta = document.getElementById('msgInput');
+  const s  = ta.selectionStart;
+  ta.value = ta.value.slice(0, s) + '\n' + ta.value.slice(s);
+  ta.selectionStart = ta.selectionEnd = s + 1;
+  ta.focus();
+  updatePreview();
+}
+
+function updatePreview() {
+  const v = document.getElementById('msgInput').value;
+  document.getElementById('charCount').textContent = v.length;
+  // Render WhatsApp markdown in preview
+  const html = v
+    ? v
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/```([\s\S]*?)```/g, '<code>$1</code>')
+        .replace(/\*(.*?)\*/g,  '<b>$1</b>')
+        .replace(/_(.*?)_/g,    '<i>$1</i>')
+        .replace(/~(.*?)~/g,    '<s>$1</s>')
+        .replace(/\n/g,         '<br>')
+    : 'Your message will appear here…';
+  document.getElementById('msgPreview').innerHTML = html;
+}
+
+async function saveMsgAndNext() {
+  const msg = document.getElementById('msgInput').value.trim();
+  if (!msg) { showToast('Write a message first.', 'err'); return; }
+  await putConfig({ message: msg });
+  config.message = msg;
+  markDone(3);
+  showToast('Message saved', 'ok');
+  goStep(4);
+}
+
+// ── Schedule ──────────────────────────────────────────────────────────────────
+function onFreqChange() {
+  const freq = document.getElementById('schedFreq').value;
+  document.getElementById('schedDayRow').style.display = freq === 'weekly' ? '' : 'none';
+}
+
+function updateSchedLabel() {
+  const freq = document.getElementById('schedFreq').value;
+  const time = document.getElementById('schedTime').value || '09:00';
+  const day  = parseInt(document.getElementById('schedDay').value);
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const t12  = fmtTime(time);
+  const labels = {
+    manual:  'No automatic runs — manual only',
+    daily:   `Every day at ${t12}`,
+    weekly:  `Every ${days[day]} at ${t12}`,
+    monthly: `1st of every month at ${t12}`,
+  };
+  document.getElementById('schedLabel').textContent = labels[freq] || '';
+}
+
+function fmtTime(t) {
+  const [h, m] = t.split(':').map(Number);
+  return `${((h%12)||12)}:${String(m).padStart(2,'0')} ${h>=12?'PM':'AM'}`;
+}
+
+async function saveSched() {
+  const freq = document.getElementById('schedFreq').value;
+  const day  = document.getElementById('schedDay').value;
+  const time = document.getElementById('schedTime').value;
+  const [h, m] = time.split(':');
+  const cronMap = {
+    daily:   `${m} ${h} * * *`,
+    weekly:  `${m} ${h} * * ${day}`,
+    monthly: `${m} ${h} 1 * *`,
+  };
+  const cron = cronMap[freq] || null;
+  await putConfig({
+    schedule: { freq, day, time, cron },
+    dedup:    { enabled: document.getElementById('dedupToggle').checked },
+    settings: {
+      skip_self: document.getElementById('skipSelfToggle').checked,
+      delay_between_messages_seconds: parseInt(document.getElementById('delayInput').value) || 3,
+    }
+  });
+  showToast('Schedule saved', 'ok');
+}
+
+async function saveSettings() {
+  await putConfig({
+    dedup:    { enabled: document.getElementById('dedupToggle').checked },
+    settings: {
+      skip_self: document.getElementById('skipSelfToggle').checked,
+      delay_between_messages_seconds: parseInt(document.getElementById('delayInput').value) || 3,
+    }
+  });
+  showToast('Settings saved', 'ok');
+}
+
+// ── Launch ────────────────────────────────────────────────────────────────────
+async function loadLaunchPage() {
+  try {
+    const [st, log] = await Promise.all([
+      fetch(`${API}/status`).then(r => r.json()),
+      fetch(`${API}/log`).then(r => r.json()),
+    ]);
+    document.getElementById('sGroups').textContent = st.groups_count ?? 0;
+    document.getElementById('sSent').textContent   = st.sent_total ?? 0;
+    document.getElementById('sRuns').textContent   = st.runs_total ?? 0;
+    const lr = log.runs?.filter(r=>r.type==='automation_run').pop();
+    document.getElementById('sLast').textContent = lr ? new Date(lr.timestamp).toLocaleDateString(undefined,{month:'short',day:'numeric'}) : '—';
+
+    const cfg = await fetch(`${API}/config`).then(r => r.json());
+    document.getElementById('sumWa').innerHTML     = waStatus === 'ready' ? '<span class="s-val ok">Connected</span>' : '<span class="s-val warn">Not connected</span>';
+    document.getElementById('sumGroups').innerHTML = (cfg.groups?.length||0) > 0 ? `<span class="s-val ok">${cfg.groups.length} group${cfg.groups.length>1?'s':''}</span>` : '<span class="s-val warn">None selected</span>';
+    document.getElementById('sumMsg').innerHTML    = cfg.message?.trim() ? '<span class="s-val ok">Set</span>' : '<span class="s-val warn">Not set</span>';
+    document.getElementById('sumSent').textContent = st.sent_total ?? 0;
+
+    const canSend = waStatus === 'ready' && (cfg.groups?.length||0) > 0 && !!cfg.message?.trim();
+    document.getElementById('btnLaunch').disabled = !canSend;
+    renderRunLog(log.runs || []);
+  } catch {}
+}
+
+async function launch() {
+  const btn = document.getElementById('btnLaunch');
+  const rs  = document.getElementById('runStatus');
+  const msg = document.getElementById('runMsg');
+  btn.disabled = true;
+  rs.className = 'run-status show';
+  msg.textContent = 'Connecting to WhatsApp…';
+  try {
+    const steps = ['Fetching group participants…','Filtering already-messaged contacts…','Sending messages…'];
+    let i = 0;
+    const iv = setInterval(() => { if(i<steps.length) msg.textContent = steps[i++]; }, 2500);
+    const res = await fetch(`${API}/send-now`, { method:'POST' }).then(r => r.json());
+    clearInterval(iv);
+    rs.className = 'run-status';
+    if (res.ok) {
+      showToast(`Sent to ${res.sent} contacts. Skipped ${res.skipped}.`, 'ok');
+      markDone(5);
+    } else {
+      showToast(res.error || 'Send failed', 'err');
+    }
+  } catch(e) {
+    rs.className = 'run-status';
+    showToast(e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    loadLaunchPage();
+  }
+}
+
+function renderRunLog(runs) {
+  const el = document.getElementById('runLog');
+  if (!runs.length) { el.innerHTML = '<div class="log-empty">No runs yet. Hit "Send Now" to get started.</div>'; return; }
+
+  el.innerHTML = [...runs].reverse().slice(0, 30).map((r, i) => {
+    const isRun   = r.type === 'automation_run';
+    const isClear = r.type === 'manual_clear';
+    const id      = `run-${i}`;
+    const dt      = new Date(r.timestamp).toLocaleString(undefined, { dateStyle:'medium', timeStyle:'short' });
+
+    // Summary line
+    let summary = '';
+    if (isRun)   summary = `${r.sent_count} sent · ${r.skipped_count} skipped`;
+    if (isClear) summary = `${r.cleared_contacts} contacts cleared`;
+
+    // Detail body
+    let body = '';
+    if (isRun) {
+      const contacts        = (r.contacts || []);
+      const skippedContacts = (r.skipped_contacts || []);
+
+      const sentHtml = contacts.length
+        ? contacts.map(c => `<span class="contact-chip chip-sent">${esc(formatContact(c))}</span>`).join('')
+        : '<span style="color:var(--muted);font-size:13px">None.</span>';
+
+      const reasonLabel = { already_sent: 'already sent', self: 'yourself', error: 'error' };
+      const skippedHtml = skippedContacts.length
+        ? skippedContacts.map(s => {
+            const label = reasonLabel[s.reason] || s.reason;
+            const tip   = s.detail ? ` title="${esc(s.detail)}"` : '';
+            return `<span class="contact-chip chip-skipped"${tip}>${esc(formatContact(s.id))} <span class="chip-reason">${label}</span></span>`;
+          }).join('')
+        : r.skipped_count > 0
+          ? `<span style="color:var(--muted);font-size:13px">${r.skipped_count} skipped (details not recorded)</span>`
+          : '<span style="color:var(--muted);font-size:13px">None.</span>';
+
+      const msgHtml = r.message
+        ? r.message
+            .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/```([\s\S]*?)```/g,'<code style="font-family:monospace;background:rgba(0,0,0,.07);padding:0 3px;border-radius:3px">$1</code>')
+            .replace(/\*(.*?)\*/g,'<b>$1</b>')
+            .replace(/_(.*?)_/g,'<i>$1</i>')
+            .replace(/~(.*?)~/g,'<s>$1</s>')
+            .replace(/\n/g,'<br>')
+        : '<span style="color:var(--muted);font-style:italic">Message not recorded</span>';
+
+      body = `
+        ${r.notes ? `<div class="run-notes">${esc(r.notes)}</div>` : ''}
+        <div class="section-label" style="margin-bottom:7px">Message sent</div>
+        <div style="background:var(--green-lt);border:1px solid #bbf7d0;border-radius:0 8px 8px 8px;padding:11px 14px;font-size:14px;line-height:1.7;max-width:360px;margin-bottom:16px;white-space:pre-wrap;word-break:break-word">${msgHtml}</div>
+        <div class="section-label">Sent (${contacts.length})</div>
+        <div class="contacts-grid" style="margin-bottom:12px">${sentHtml}</div>
+        <div class="section-label">Skipped (${skippedContacts.length || r.skipped_count || 0})</div>
+        <div class="contacts-grid">${skippedHtml}</div>`;
+    } else if (isClear) {
+      body = `<div style="font-size:13px;color:var(--muted)">Sent log was cleared — ${r.cleared_contacts} contacts removed.</div>`;
+    }
+
+    return `
+    <div class="run-entry" id="${id}">
+      <div class="run-header" onclick="toggleRun('${id}')">
+        <div class="run-meta">
+          <span class="tag ${isRun ? 'tag-run' : 'tag-clear'}">${isRun ? 'Run' : isClear ? 'Cleared' : 'Skipped'}</span>
+          <span class="run-time">${dt}</span>
+        </div>
+        <span class="run-summary">${summary}</span>
+        <span class="run-toggle" id="tog-${id}">›</span>
+      </div>
+      <div class="run-body" id="body-${id}">${body}</div>
+    </div>`;
+  }).join('');
+}
+
+function toggleRun(id) {
+  const body = document.getElementById(`body-${id}`);
+  const tog  = document.getElementById(`tog-${id}`);
+  const open = body.classList.toggle('open');
+  tog.classList.toggle('open', open);
+}
+
+function formatContact(c) {
+  // "5511941256888@c.us" → "+55 11 94125-6888"
+  const num = c.replace('@c.us', '').replace('@g.us', '');
+  if (num.length >= 10) {
+    const country = num.slice(0, 2);
+    const rest    = num.slice(2);
+    return `+${country} ${rest}`;
+  }
+  return c;
+}
+
+async function clearLog() {
+  if (!confirm('Clear sent log? All contacts become eligible again.')) return;
+  const d = await fetch(`${API}/log/clear`, {method:'POST'}).then(r=>r.json());
+  showToast(`Cleared ${d.cleared} contacts`, 'ok');
+  loadLaunchPage();
+}
+
+// ── Logout ────────────────────────────────────────────────────────────────────
+async function logout() {
+  if (!confirm('Log out of WhatsApp? You\'ll need to scan the QR code again to reconnect.')) return;
+  document.getElementById('btnLogout').disabled = true;
+  try {
+    const res = await fetch(`${API}/wa/logout`, { method: 'POST' }).then(r => r.json());
+    if (res.ok) {
+      document.getElementById('btnLogout').style.display = 'none';
+      document.getElementById('btnLogout').disabled = false;
+      document.getElementById('nextFromConnect').disabled = true;
+      document.getElementById('connectTitle').textContent = 'Link your WhatsApp';
+      document.getElementById('connectDesc').textContent  = 'Scan the QR code on the left with your phone to link this dashboard to your WhatsApp account.';
+      document.getElementById('connectSteps').style.display = '';
+      document.getElementById('qrWrap').innerHTML = '<div class="qr-placeholder"><span id="qrMsg">Loading…</span></div>';
+      showToast('Logged out. Scan the new QR code to reconnect.', '');
+      goStep(1);
+    } else {
+      showToast('Logout failed: ' + (res.error || 'unknown error'), 'err');
+      document.getElementById('btnLogout').disabled = false;
+    }
+  } catch (e) {
+    showToast(e.message, 'err');
+    document.getElementById('btnLogout').disabled = false;
+  }
+}
+
+// ── API helpers ───────────────────────────────────────────────────────────────
+async function putConfig(patch) {
+  return fetch(`${API}/config`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(patch)}).then(r=>r.json());
+}
+
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+let toastT;
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = `show ${type}`;
+  clearTimeout(toastT); toastT = setTimeout(()=>t.className='', 4000);
+}
+
+init();
+</script>
+</body>
+</html>

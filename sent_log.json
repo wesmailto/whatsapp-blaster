@@ -1,0 +1,44 @@
+{
+  "sent": [],
+  "runs": [
+    {
+      "type": "automation_run",
+      "timestamp": "2026-04-02T14:40:38.575Z",
+      "sent_count": 3,
+      "contacts": [
+        "5511941256888@c.us",
+        "5511997437493@c.us",
+        "5511972744540@c.us"
+      ],
+      "skipped_count": 1,
+      "notes": ""
+    },
+    {
+      "type": "automation_run",
+      "timestamp": "2026-04-02T14:41:31.254Z",
+      "sent_count": 3,
+      "contacts": [
+        "5511941256888@c.us",
+        "5511997437493@c.us",
+        "5511972744540@c.us"
+      ],
+      "skipped_count": 1,
+      "notes": ""
+    },
+    {
+      "type": "automation_run",
+      "timestamp": "2026-04-02T14:56:00.447Z",
+      "sent_count": 1,
+      "contacts": [
+        "5511984801027@c.us"
+      ],
+      "skipped_count": 1,
+      "notes": ""
+    },
+    {
+      "type": "manual_clear",
+      "timestamp": "2026-04-02T15:16:22.088Z",
+      "cleared_contacts": 4
+    }
+  ]
+}
