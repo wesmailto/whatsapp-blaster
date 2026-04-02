@@ -2,21 +2,21 @@
   "groups": [
     "teste grupo"
   ],
-  "message": "Oieee💕\n✨ Grupo VIP liberado ✨\nAchadinhos de casa e beleza todos os dias 🛍️✨\nTá valendo MUITO a pena🏠💄\n*Vem*👇\nhttps://chat.whatsapp.com/EzA3OXqQQ0n56MSTOx9AQm?mode=gi_t",
+  "message": "Oieee💕\n\n✨ Grupo VIP liberado ✨\n\nAchadinhos de casa e beleza todos os dias 🛍️✨\nTá valendo MUITO a pena🏠💄\n\n*Vem*👇\nhttps://chat.whatsapp.com/EzA3OXqQQ0n56MSTOx9AQm?mode=gi_t",
   "dedup": {
     "enabled": false,
     "mode": "forever"
   },
   "schedule": {
     "description": "Managed via Cowork scheduled tasks",
-    "last_updated": "2026-04-02T17:37:46.680Z",
+    "last_updated": "2026-04-02T18:04:57.691Z",
     "freq": "weekly",
     "day": "4",
     "time": "11:41",
     "cron": "41 11 * * 4"
   },
   "settings": {
-    "delay_between_messages_seconds": 10,
+    "delay_between_messages_seconds": 80,
     "skip_self": false
   },
   "excluded_contacts": [

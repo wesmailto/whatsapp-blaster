@@ -174,7 +174,8 @@ async function runBlast() {
   if (!groups?.length)  throw new Error('No groups configured');
   if (!message?.trim()) throw new Error('No message set');
 
-  const delay    = (settings?.delay_between_messages_seconds ?? 3) * 1000;
+  const delay    = (settings?.delay_between_messages_seconds ?? 80) * 1000;
+  const dailyMax = settings?.daily_limit ?? 80;   // max messages per run (0 = unlimited)
   const dedupe   = dedup?.enabled !== false;
   const skip     = settings?.skip_self !== false;
   const myId     = skip ? (await wa.client.getContactById(wa.client.info.wid._serialized))?.id._serialized : null;
@@ -208,16 +209,31 @@ async function runBlast() {
     if (excluded.has(contactId))                 { skipped++; skippedContacts.push({ id: contactId, reason: 'excluded' }); continue; }
     if (dedupe && log.sent.includes(contactId))  { skipped++; skippedContacts.push({ id: contactId, reason: 'already_sent' }); continue; }
 
+    if (dailyMax > 0 && sent >= dailyMax) {
+      skipped++;
+      skippedContacts.push({ id: contactId, reason: 'daily_limit' });
+      continue;
+    }
+
     try {
       const contact = await wa.client.getContactById(contactId);
       wa.sendProgress.current = contact.name || contact.pushname || `+${contactId.split('@')[0]}`;
-      const chat    = await contact.getChat();
+      const chat = await contact.getChat();
+      // Simulate typing for 1.5–3s before sending (looks human)
+      await chat.sendStateTyping();
+      await new Promise(r => setTimeout(r, 1500 + Math.random() * 1500));
+      await chat.clearState();
       await chat.sendMessage(message);
       sentContacts.push(contactId);
       sent++;
       wa.sendProgress.sent = sent;
       console.log(`  ✉️  Sent to ${contact.name || contactId}`);
-      if (delay > 0) await new Promise(r => setTimeout(r, delay));
+      if (delay > 0) {
+        // Add ±40% jitter so the interval never looks robotic
+        const jitter = delay * 0.4;
+        const actual = delay + (Math.random() * jitter * 2 - jitter);
+        await new Promise(r => setTimeout(r, actual));
+      }
     } catch (e) {
       console.error(`  ❌ Failed to send to ${contactId}:`, e.message);
       skipped++;
