@@ -79,30 +79,44 @@ function initWhatsApp() {
 }
 
 // ── Group helpers ─────────────────────────────────────────────────────────────
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+let groupsRefreshing = false;
 
-async function refreshGroups(force = false) {
-  if (wa.status !== 'ready') return [];
-
-  const now = Date.now();
-  // Return cache if fresh and not forced
-  if (!force && wa.groupsCache && wa.groupsAt && (now - wa.groupsAt) < CACHE_TTL_MS) {
-    return wa.groupsCache;
-  }
-
+async function fetchAndCacheGroups() {
+  if (groupsRefreshing || wa.status !== 'ready') return;
+  groupsRefreshing = true;
   try {
     const chats = await wa.client.getChats();
     wa.groupsCache = chats
       .filter(c => c.isGroup)
-      .map(c => ({ id: c.id._serialized, name: c.name, participants: c.participants?.length ?? 0 }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-    wa.groupsAt = now;
+      .map(c => ({
+        id:           c.id._serialized,
+        name:         c.name,
+        participants: c.participants?.length ?? 0,
+        lastActive:   c.lastMessage?.timestamp ?? 0,
+      }))
+      .sort((a, b) => b.lastActive - a.lastActive);
+    wa.groupsAt = Date.now();
     wa.groups   = wa.groupsCache;
     console.log(`📋 Loaded ${wa.groups.length} groups (cache refreshed).`);
   } catch (e) {
     console.error('Error fetching groups:', e.message);
-    // Return stale cache if available
-    if (wa.groupsCache) return wa.groupsCache;
+  } finally {
+    groupsRefreshing = false;
+  }
+}
+
+async function refreshGroups(force = false) {
+  if (wa.status !== 'ready') return [];
+  const now = Date.now();
+  const stale = !wa.groupsCache || !wa.groupsAt || (now - wa.groupsAt) >= CACHE_TTL_MS;
+
+  if (force || (!wa.groupsCache)) {
+    // First load or forced — must wait
+    await fetchAndCacheGroups();
+  } else if (stale) {
+    // Cache exists but stale — return it now, refresh silently in background
+    fetchAndCacheGroups();
   }
   return wa.groups;
 }
@@ -113,6 +127,8 @@ async function getGroupParticipants(groupId) {
 }
 
 // ── Sending ───────────────────────────────────────────────────────────────────
+wa.sendProgress = null; // { running, sent, skipped, total, current, startedAt }
+
 async function runBlast() {
   if (wa.status !== 'ready') throw new Error('WhatsApp not connected');
 
@@ -123,10 +139,11 @@ async function runBlast() {
   if (!groups?.length)  throw new Error('No groups configured');
   if (!message?.trim()) throw new Error('No message set');
 
-  const delay  = (settings?.delay_between_messages_seconds ?? 3) * 1000;
-  const dedupe = dedup?.enabled !== false;
-  const skip   = settings?.skip_self !== false;
-  const myId   = skip ? (await wa.client.getContactById(wa.client.info.wid._serialized))?.id._serialized : null;
+  const delay    = (settings?.delay_between_messages_seconds ?? 3) * 1000;
+  const dedupe   = dedup?.enabled !== false;
+  const skip     = settings?.skip_self !== false;
+  const myId     = skip ? (await wa.client.getContactById(wa.client.info.wid._serialized))?.id._serialized : null;
+  const excluded = new Set(cfg.excluded_contacts || []);
 
   // Collect all unique participants across all selected groups
   const all = new Set();
@@ -137,26 +154,40 @@ async function runBlast() {
     participants.forEach(p => all.add(p));
   }
 
+  // Figure out how many we'll actually try to send to (excluding pre-filtered)
+  const queue = [...all].filter(id => {
+    if (skip && id === myId) return false;
+    if (excluded.has(id)) return false;
+    if (dedupe && log.sent.includes(id)) return false;
+    return true;
+  });
+
+  wa.sendProgress = { running: true, sent: 0, skipped: 0, total: queue.length, current: null, startedAt: Date.now() };
+
   let sent = 0, skipped = 0;
   const sentContacts    = [];
   const skippedContacts = [];
 
   for (const contactId of all) {
     if (skip && contactId === myId)              { skipped++; skippedContacts.push({ id: contactId, reason: 'self' }); continue; }
+    if (excluded.has(contactId))                 { skipped++; skippedContacts.push({ id: contactId, reason: 'excluded' }); continue; }
     if (dedupe && log.sent.includes(contactId))  { skipped++; skippedContacts.push({ id: contactId, reason: 'already_sent' }); continue; }
 
     try {
       const contact = await wa.client.getContactById(contactId);
+      wa.sendProgress.current = contact.name || contact.pushname || `+${contactId.split('@')[0]}`;
       const chat    = await contact.getChat();
       await chat.sendMessage(message);
       sentContacts.push(contactId);
       sent++;
+      wa.sendProgress.sent = sent;
       console.log(`  ✉️  Sent to ${contact.name || contactId}`);
       if (delay > 0) await new Promise(r => setTimeout(r, delay));
     } catch (e) {
       console.error(`  ❌ Failed to send to ${contactId}:`, e.message);
       skipped++;
       skippedContacts.push({ id: contactId, reason: 'error', detail: e.message });
+      wa.sendProgress.skipped = skipped;
     }
   }
 
@@ -174,6 +205,7 @@ async function runBlast() {
   });
   writeJSON(LOG_F, log);
 
+  wa.sendProgress = null;
   console.log(`\n📊 Run complete: ${sent} sent, ${skipped} skipped.\n`);
   return { sent, skipped, sentContacts };
 }
@@ -222,14 +254,21 @@ app.get('/api/wa/qr', (req, res) => {
 // Groups list — supports ?q=search&page=1&limit=12&force=1
 app.get('/api/wa/groups', async (req, res) => {
   const force  = req.query.force === '1';
-  if (wa.status === 'ready') await refreshGroups(force);
+  if (wa.status === 'ready') {
+    if (force || !wa.groupsCache) {
+      await fetchAndCacheGroups();   // wait only on first load or manual refresh
+    } else {
+      const stale = !wa.groupsAt || (Date.now() - wa.groupsAt) >= CACHE_TTL_MS;
+      if (stale) fetchAndCacheGroups(); // refresh silently in background, don't await
+    }
+  }
 
   const q      = (req.query.q || '').toLowerCase().trim();
-  const limit  = Math.min(parseInt(req.query.limit) || 12, 50);
+  const limit  = Math.min(parseInt(req.query.limit) || 12, 500);
   const page   = Math.max(parseInt(req.query.page)  || 1, 1);
 
   let filtered = wa.groups;
-  if (q) filtered = filtered.filter(g => g.name.toLowerCase().includes(q));
+  if (q) filtered = filtered.filter(g => (g.name || '').toLowerCase().includes(q));
 
   const total  = filtered.length;
   const pages  = Math.ceil(total / limit) || 1;
@@ -244,8 +283,9 @@ app.get('/api/config', (req, res) => res.json(readJSON(CONFIG_F)));
 app.put('/api/config', (req, res) => {
   const data = req.body;
   const cfg  = readJSON(CONFIG_F);
-  if (data.groups   !== undefined) cfg.groups   = data.groups;
-  if (data.message  !== undefined) cfg.message  = data.message;
+  if (data.groups             !== undefined) cfg.groups             = data.groups;
+  if (data.message            !== undefined) cfg.message            = data.message;
+  if (data.excluded_contacts  !== undefined) cfg.excluded_contacts  = data.excluded_contacts;
   if (data.dedup)    Object.assign(cfg.dedup,    data.dedup);
   if (data.settings) Object.assign(cfg.settings, data.settings);
   if (data.schedule) {
@@ -317,6 +357,86 @@ app.post('/api/wa/logout', async (req, res) => {
   // Re-init so a fresh QR is generated
   setTimeout(initWhatsApp, 1000);
   res.json({ ok: true });
+});
+
+// Participants across selected groups
+app.get('/api/wa/participants', async (req, res) => {
+  if (wa.status !== 'ready') return res.json({ participants: [], total: 0 });
+  const cfg = readJSON(CONFIG_F);
+  const groupNames = cfg.groups || [];
+  const seen = new Set();
+  const participants = [];
+  for (const gName of groupNames) {
+    const grp = wa.groups.find(g => g.name === gName);
+    if (!grp) continue;
+    try {
+      const chat = await wa.client.getChatById(grp.id);
+      for (const p of (chat.participants || [])) {
+        const id = p.id._serialized;
+        if (!seen.has(id)) {
+          seen.add(id);
+          // Try to get display name (pushname) — may be empty for contacts not in your address book
+          let name = '';
+          try {
+            const contact = await wa.client.getContactById(id);
+            name = contact.pushname || contact.name || '';
+          } catch {}
+          participants.push({ id, phone: p.id.user, name, group: gName });
+        }
+      }
+    } catch (e) { console.error('Participants error for', gName, e.message); }
+  }
+  res.json({ participants, total: participants.length });
+});
+
+// Blast preview — breakdown of what will happen on Send Now
+app.get('/api/wa/blast-preview', async (req, res) => {
+  if (wa.status !== 'ready') return res.json({ ok: false, error: 'WhatsApp not connected' });
+  const cfg = readJSON(CONFIG_F);
+  const log = readJSON(LOG_F);
+  const groupNames = cfg.groups || [];
+  const excluded   = new Set(cfg.excluded_contacts || []);
+  const alreadySent = new Set(cfg.dedup?.enabled !== false ? (log.sent || []) : []);
+  const myId = cfg.settings?.skip_self !== false
+    ? (await wa.client.getContactById(wa.client.info.wid._serialized).catch(() => null))?.id?._serialized
+    : null;
+
+  const seen = new Set();
+  const breakdown = { excluded: [], already_sent: [], self: [], will_message: [] };
+
+  for (const gName of groupNames) {
+    const grp = wa.groups.find(g => g.name === gName);
+    if (!grp) continue;
+    try {
+      const chat = await wa.client.getChatById(grp.id);
+      for (const p of (chat.participants || [])) {
+        const id = p.id._serialized;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        if (myId && id === myId)      breakdown.self.push(id);
+        else if (excluded.has(id))    breakdown.excluded.push(id);
+        else if (alreadySent.has(id)) breakdown.already_sent.push(id);
+        else                          breakdown.will_message.push(id);
+      }
+    } catch (e) {}
+  }
+
+  res.json({
+    ok: true,
+    groups: groupNames,
+    total_participants: seen.size,
+    will_message: breakdown.will_message.length,
+    excluded: breakdown.excluded.length,
+    excluded_contacts: breakdown.excluded,
+    already_sent: breakdown.already_sent.length,
+    self_skipped: breakdown.self.length,
+    dedup_enabled: cfg.dedup?.enabled !== false,
+  });
+});
+
+// Live send progress
+app.get('/api/send-status', (req, res) => {
+  res.json(wa.sendProgress || { running: false });
 });
 
 // Send now

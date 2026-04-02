@@ -94,6 +94,7 @@
     /* Step 3 — Message */
     label.lbl{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px}
     textarea,input[type=text],input[type=number],input[type=time],select{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;font-size:14px;color:var(--text);background:#fff;outline:none;font-family:inherit;transition:border-color .15s}
+    #delayInput{width:70px;padding:6px 8px;font-size:13px}
     textarea:focus,input:focus,select:focus{border-color:var(--green)}
     textarea{resize:vertical;min-height:150px;line-height:1.6}
     .char-hint{font-size:12px;color:var(--muted);margin-top:4px}
@@ -133,9 +134,11 @@
     .s-val.ok{color:var(--green-dk)}
     .s-val.warn{color:var(--warn)}
     .launch-btn-wrap{padding:16px 0 4px}
-    .run-status{background:var(--bg);border-radius:8px;border:1px solid var(--border);padding:14px;text-align:center;margin-top:14px;display:none}
+    .run-status{background:var(--bg);border-radius:8px;border:1px solid var(--border);padding:16px;margin-top:14px;display:none}
     .run-status.show{display:block}
-    .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-right:7px}
+    .run-progress-bar-wrap{height:6px;background:#e2e8f0;border-radius:99px;margin:10px 0 8px;overflow:hidden}
+    .run-progress-bar{height:100%;background:var(--green);border-radius:99px;transition:width .4s ease}
+    .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-right:6px}
     @keyframes spin{to{transform:rotate(360deg)}}
 
     /* Run history */
@@ -244,24 +247,51 @@
 <!-- ─────────────────────────────────────────────────────────────────────────── -->
 <!-- STEP 2: Groups -->
 <div class="page" id="page-2">
-  <div class="card">
-    <div class="card-h">
-      <h2>Target Groups</h2>
-      <button class="btn btn-secondary" onclick="loadGroups(true)">Refresh</button>
-    </div>
-    <div class="card-b">
-      <p style="font-size:14px;color:var(--muted);margin-bottom:14px">Select the groups whose members you want to message. All participants will receive your DM.</p>
-      <div class="groups-toolbar">
-        <input class="groups-search" id="groupSearch" type="text" placeholder="Search groups…" oninput="onGroupSearch()" />
-        <span id="selectedCount" style="font-size:13px;color:var(--muted);white-space:nowrap"></span>
+
+  <!-- Phase A: Group selection -->
+  <div id="groupsPhase">
+    <div class="card">
+      <div class="card-h">
+        <h2>Target Groups</h2>
+        <button class="btn btn-secondary" onclick="loadGroups(true)">Refresh</button>
       </div>
-      <div id="groupsContainer" class="groups-loading">Loading your groups…</div>
-      <div id="groupsPagination" class="pagination" style="display:none"></div>
-      <div class="btn-row" style="margin-top:14px">
-        <button class="btn btn-primary" onclick="saveGroupsAndNext()">Save & Next: Message</button>
+      <div class="card-b">
+        <p style="font-size:14px;color:var(--muted);margin-bottom:14px">Select the groups whose members you want to message. All participants will receive your DM.</p>
+        <div class="groups-toolbar">
+          <input class="groups-search" id="groupSearch" type="text" placeholder="Search groups…" oninput="onGroupSearch()" />
+          <span id="selectedCount" style="font-size:13px;color:var(--muted);white-space:nowrap"></span>
+        </div>
+        <div id="groupsContainer" class="groups-loading">Loading your groups…</div>
+        <div id="groupsPagination" class="pagination" style="display:none"></div>
+        <div class="btn-row" style="margin-top:14px">
+          <button class="btn btn-primary" onclick="saveGroupsAndLoadParticipants()">Save & Review Participants →</button>
+        </div>
       </div>
     </div>
   </div>
+
+  <!-- Phase B: Exclude contacts -->
+  <div id="exclusionPhase" style="display:none">
+    <div class="card">
+      <div class="card-h">
+        <h2>Exclude Contacts</h2>
+        <span id="exclusionMeta" style="font-size:13px;color:var(--muted)"></span>
+      </div>
+      <div class="card-b">
+        <p style="font-size:14px;color:var(--muted);margin-bottom:14px">Check any contacts you want to <strong>skip</strong>. Everyone else will receive your message.</p>
+        <div class="groups-toolbar" style="margin-bottom:10px">
+          <input class="groups-search" id="participantSearch" type="text" placeholder="Search contacts…" oninput="onParticipantSearch()" />
+          <span id="excludedCount" style="font-size:13px;color:var(--muted);white-space:nowrap"></span>
+        </div>
+        <div id="participantsList" style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:4px 0"></div>
+        <div class="btn-row" style="margin-top:14px;gap:8px">
+          <button class="btn btn-secondary" onclick="backToGroups()">← Back to Groups</button>
+          <button class="btn btn-primary" onclick="saveExclusionsAndNext()">Save & Next: Message →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- ─────────────────────────────────────────────────────────────────────────── -->
@@ -318,6 +348,17 @@
     <div class="sc"><div class="n" id="sLast">—</div><div class="l">Last Run</div></div>
   </div>
 
+  <!-- Pre-flight summary -->
+  <div class="card" id="preflightCard">
+    <div class="card-h">
+      <h2>Pre-flight Check</h2>
+      <span id="preflightStatus" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="card-b" id="preflightBody">
+      <div style="font-size:13px;color:var(--muted)">Loading…</div>
+    </div>
+  </div>
+
   <!-- Send Now -->
   <div class="card">
     <div class="card-h"><h2>Send Now</h2></div>
@@ -347,7 +388,14 @@
         </button>
       </div>
       <div class="run-status" id="runStatus">
-        <span class="spinner"></span><span id="runMsg">Sending messages…</span>
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px">
+          <span><span class="spinner"></span><span id="runMsg">Preparing…</span></span>
+          <span id="runCount" style="color:var(--muted);font-variant-numeric:tabular-nums"></span>
+        </div>
+        <div class="run-progress-bar-wrap">
+          <div class="run-progress-bar" id="runBar" style="width:0%"></div>
+        </div>
+        <div id="runCurrent" style="font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
       </div>
     </div>
   </div>
@@ -437,12 +485,16 @@ let waStatus = 'disconnected';
 let allGroups     = [];   // full list from server (loaded once)
 let filteredGroups = [];  // allGroups filtered by search query (client-side)
 let selectedGroupIds = new Set();
-let groupsPage = 1;
 let groupsSearchQ = '';
 let groupsSearchTimer = null;
-const GROUPS_PER_PAGE = 12;
+const GROUPS_STEP = 15;       // how many to show initially and per "Load more"
+let groupsVisible = GROUPS_STEP; // current number of visible groups
 let config = {};
 let pollTimer;
+let allParticipants  = [];   // full participants list from server for selected groups
+let filteredParticipants = []; // filtered by search
+let excludedContacts = new Set(); // contact ids to skip
+let participantSearchTimer = null;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
@@ -536,7 +588,10 @@ function goStep(n) {
   });
   currentStep = n;
   if (n === 2) {
-    groupsPage = 1; groupsSearchQ = '';
+    // Always return to groups phase (not exclusion phase) when navigating here
+    document.getElementById('groupsPhase').style.display = '';
+    document.getElementById('exclusionPhase').style.display = 'none';
+    groupsSearchQ = ''; groupsVisible = GROUPS_STEP;
     document.getElementById('groupSearch').value = '';
     loadGroups();
   }
@@ -578,19 +633,22 @@ async function loadGroups(force = false) {
   applyFilterAndRender();
 }
 
-// Client-side filter + paginate — instant, no server round-trip
+// Client-side filter + load-more — instant, no server round-trip
 function applyFilterAndRender() {
   const c   = document.getElementById('groupsContainer');
   const pag = document.getElementById('groupsPagination');
   const q   = groupsSearchQ.toLowerCase();
 
-  filteredGroups = q
-    ? allGroups.filter(g => g.name.toLowerCase().includes(q))
+  const base = q
+    ? allGroups.filter(g => (g.name || '').toLowerCase().includes(q))
     : allGroups;
+  // Selected groups always float to the top
+  filteredGroups = [
+    ...base.filter(g =>  selectedGroupIds.has(g.id)),
+    ...base.filter(g => !selectedGroupIds.has(g.id)),
+  ];
 
   const total = filteredGroups.length;
-  const pages = Math.ceil(total / GROUPS_PER_PAGE) || 1;
-  if (groupsPage > pages) groupsPage = 1;
 
   if (!total) {
     c.className = 'groups-empty';
@@ -603,9 +661,9 @@ function applyFilterAndRender() {
     return;
   }
 
-  // Render current page
-  const start   = (groupsPage - 1) * GROUPS_PER_PAGE;
-  const pageItems = filteredGroups.slice(start, start + GROUPS_PER_PAGE);
+  // When search changes, reset visible count
+  const visible = Math.min(groupsVisible, total);
+  const pageItems = filteredGroups.slice(0, visible);
 
   c.className = 'groups-grid';
   c.innerHTML = pageItems.map(g => {
@@ -621,39 +679,26 @@ function applyFilterAndRender() {
   }).join('');
   updateSelectedCount();
 
-  // Pagination
-  if (pages <= 1) { pag.style.display = 'none'; return; }
+  // Load more button
+  if (visible >= total) { pag.style.display = 'none'; return; }
   pag.style.display = 'flex';
-  const end = Math.min(groupsPage * GROUPS_PER_PAGE, total);
-  const pageNums = [];
-  const w = 2;
-  for (let p = 1; p <= pages; p++) {
-    if (p === 1 || p === pages || (p >= groupsPage - w && p <= groupsPage + w)) pageNums.push(p);
-    else if (pageNums[pageNums.length - 1] !== '…') pageNums.push('…');
-  }
   pag.innerHTML = `
-    <span class="pag-info">Showing ${start + 1}–${end} of ${total} group${total !== 1 ? 's' : ''}</span>
+    <span class="pag-info">Showing ${visible} of ${total} group${total !== 1 ? 's' : ''}</span>
     <div class="pag-btns">
-      <button class="pag-btn" onclick="changePage(${groupsPage - 1})" ${groupsPage === 1 ? 'disabled' : ''}>‹</button>
-      ${pageNums.map(p => p === '…'
-        ? `<span style="padding:0 4px;color:var(--muted)">…</span>`
-        : `<button class="pag-btn ${p === groupsPage ? 'active' : ''}" onclick="changePage(${p})">${p}</button>`
-      ).join('')}
-      <button class="pag-btn" onclick="changePage(${groupsPage + 1})" ${groupsPage === pages ? 'disabled' : ''}>›</button>
+      <button class="pag-btn" onclick="loadMoreGroups()">Load more</button>
     </div>`;
 }
 
-function changePage(p) {
-  groupsPage = p;
+function loadMoreGroups() {
+  groupsVisible += GROUPS_STEP;
   applyFilterAndRender();
-  document.getElementById('groupsContainer').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function onGroupSearch() {
   clearTimeout(groupsSearchTimer);
   groupsSearchTimer = setTimeout(() => {
     groupsSearchQ = document.getElementById('groupSearch').value.trim();
-    groupsPage = 1;
+    groupsVisible = GROUPS_STEP; // reset to first page on new search
     applyFilterAndRender(); // instant — no server call
   }, 200);
 }
@@ -673,13 +718,99 @@ function updateSelectedCount() {
     selectedGroupIds.size ? `${selectedGroupIds.size} group${selectedGroupIds.size>1?'s':''} selected` : '';
 }
 
-async function saveGroupsAndNext() {
+async function saveGroupsAndLoadParticipants() {
   const names = allGroups.filter(g => selectedGroupIds.has(g.id)).map(g => g.name);
   if (!names.length) { showToast('Select at least one group.', 'err'); return; }
   await putConfig({ groups: names });
   config.groups = names;
-  markDone(2);
   showToast('Groups saved', 'ok');
+  // Switch to exclusion phase
+  document.getElementById('groupsPhase').style.display = 'none';
+  document.getElementById('exclusionPhase').style.display = '';
+  document.getElementById('participantSearch').value = '';
+  loadParticipants();
+}
+
+async function loadParticipants() {
+  const list = document.getElementById('participantsList');
+  list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted)"><div class="spinner" style="width:20px;height:20px;border-width:2px;display:inline-block"></div><br><br>Loading participants…</div>';
+  try {
+    const data = await fetch(`${API}/wa/participants`).then(r => r.json());
+    allParticipants = data.participants || [];
+    filteredParticipants = allParticipants;
+    // Restore exclusions from config
+    excludedContacts = new Set(config.excluded_contacts || []);
+    updateExcludedCount();
+    renderParticipants();
+    document.getElementById('exclusionMeta').textContent = `${allParticipants.length} participant${allParticipants.length !== 1 ? 's' : ''} across ${config.groups?.length || 0} group${(config.groups?.length || 0) !== 1 ? 's' : ''}`;
+  } catch (e) {
+    list.innerHTML = `<div style="padding:16px;color:var(--danger);font-size:13px">Failed to load participants: ${e.message}</div>`;
+  }
+}
+
+function renderParticipants() {
+  const list = document.getElementById('participantsList');
+  if (!filteredParticipants.length) {
+    list.innerHTML = '<div style="padding:14px 16px;font-size:13px;color:var(--muted)">No participants found.</div>';
+    return;
+  }
+  list.innerHTML = filteredParticipants.map(p => {
+    const checked   = excludedContacts.has(p.id) ? 'checked' : '';
+    const isExcluded = excludedContacts.has(p.id);
+    const phone = p.phone ? `+${p.phone}` : p.id;
+    const primary   = p.name || phone;
+    const secondary = p.name ? phone : '';
+    return `<label style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;transition:background .1s" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+      <input type="checkbox" ${checked} onchange="toggleExclusion('${p.id}')" style="width:15px;height:15px;accent-color:var(--danger);flex-shrink:0" />
+      <span style="flex:1;min-width:0;${isExcluded ? 'text-decoration:line-through;color:var(--muted)' : ''}">
+        ${primary}${secondary ? `<span style="display:block;font-size:11px;color:var(--muted)">${secondary}</span>` : ''}
+      </span>
+      <span style="font-size:11px;color:var(--muted);white-space:nowrap;flex-shrink:0">${p.group || ''}</span>
+    </label>`;
+  }).join('');
+}
+
+function toggleExclusion(id) {
+  if (excludedContacts.has(id)) {
+    excludedContacts.delete(id);
+  } else {
+    excludedContacts.add(id);
+  }
+  updateExcludedCount();
+  renderParticipants();
+}
+
+function updateExcludedCount() {
+  const n = excludedContacts.size;
+  document.getElementById('excludedCount').textContent = n ? `${n} excluded` : '';
+}
+
+function onParticipantSearch() {
+  clearTimeout(participantSearchTimer);
+  participantSearchTimer = setTimeout(() => {
+    const q = document.getElementById('participantSearch').value.trim().toLowerCase();
+    filteredParticipants = q
+      ? allParticipants.filter(p =>
+          (p.name  && p.name.toLowerCase().includes(q)) ||
+          (p.phone && p.phone.includes(q)) ||
+          (p.id   || '').toLowerCase().includes(q) ||
+          (p.group || '').toLowerCase().includes(q)
+        )
+      : allParticipants;
+    renderParticipants();
+  }, 200);
+}
+
+function backToGroups() {
+  document.getElementById('exclusionPhase').style.display = 'none';
+  document.getElementById('groupsPhase').style.display = '';
+}
+
+async function saveExclusionsAndNext() {
+  const excluded = [...excludedContacts];
+  await putConfig({ excluded_contacts: excluded });
+  config.excluded_contacts = excluded;
+  markDone(2);
   goStep(3);
 }
 
@@ -856,21 +987,100 @@ async function loadLaunchPage() {
     document.getElementById('btnLaunch').disabled = !canSend;
     renderRunLog(log.runs || []);
   } catch {}
+
+  // Pre-flight summary
+  loadPreflightSummary();
+}
+
+async function loadPreflightSummary() {
+  const body   = document.getElementById('preflightBody');
+  const status = document.getElementById('preflightStatus');
+  body.innerHTML = '<div style="font-size:13px;color:var(--muted)">Loading…</div>';
+  status.textContent = '';
+  try {
+    const d = await fetch(`${API}/wa/blast-preview`).then(r => r.json());
+    if (!d.ok) {
+      body.innerHTML = `<div style="font-size:13px;color:var(--muted)">${d.error || 'WhatsApp not connected — connect first to see pre-flight details.'}</div>`;
+      return;
+    }
+    const cfg = await fetch(`${API}/config`).then(r => r.json());
+    const groups = (cfg.groups || []);
+    const groupsHtml = groups.length
+      ? groups.map(g => `<span style="display:inline-block;background:#f1f5f9;border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:12px;margin:2px 3px 2px 0">${g}</span>`).join('')
+      : '<span style="color:var(--muted)">None</span>';
+
+    const excluded = d.excluded || 0;
+    const excludedNames = (d.excluded_contacts || []).slice(0, 5).map(id => {
+      const num = id.split('@')[0];
+      return `+${num}`;
+    });
+    const excludedHint = excluded > 0
+      ? `${excludedNames.join(', ')}${excluded > 5 ? ` +${excluded - 5} more` : ''}`
+      : '';
+
+    body.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:14px">
+        <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+          <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Total Participants</div>
+          <div style="font-size:22px;font-weight:700;color:var(--txt)">${d.total_participants}</div>
+        </div>
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 14px">
+          <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Will Be Messaged</div>
+          <div style="font-size:22px;font-weight:700;color:var(--green)">${d.will_message}</div>
+        </div>
+        <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:12px 14px">
+          <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Skipped (already sent)</div>
+          <div style="font-size:22px;font-weight:700;color:#ea580c">${d.already_sent}</div>
+        </div>
+        <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 14px">
+          <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Excluded by You</div>
+          <div style="font-size:22px;font-weight:700;color:var(--danger)">${excluded}</div>
+          ${excludedHint ? `<div style="font-size:11px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${excludedHint}</div>` : ''}
+        </div>
+      </div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:6px;font-weight:500">Groups selected</div>
+      <div style="margin-bottom:4px">${groupsHtml}</div>
+    `;
+    status.textContent = 'live data';
+  } catch (e) {
+    body.innerHTML = `<div style="font-size:13px;color:var(--muted)">Could not load pre-flight data.</div>`;
+  }
 }
 
 async function launch() {
-  const btn = document.getElementById('btnLaunch');
-  const rs  = document.getElementById('runStatus');
-  const msg = document.getElementById('runMsg');
+  const btn     = document.getElementById('btnLaunch');
+  const rs      = document.getElementById('runStatus');
+  const msg     = document.getElementById('runMsg');
+  const countEl = document.getElementById('runCount');
+  const bar     = document.getElementById('runBar');
+  const current = document.getElementById('runCurrent');
+
   btn.disabled = true;
   rs.className = 'run-status show';
-  msg.textContent = 'Connecting to WhatsApp…';
+  msg.textContent  = 'Preparing…';
+  countEl.textContent = '';
+  bar.style.width  = '0%';
+  current.textContent = '';
+
+  // Poll send-status every second to update the progress bar
+  const iv = setInterval(async () => {
+    try {
+      const s = await fetch(`${API}/send-status`).then(r => r.json());
+      if (!s.running) return;
+      msg.textContent = 'Sending…';
+      if (s.total > 0) {
+        const pct = Math.round((s.sent / s.total) * 100);
+        bar.style.width  = `${pct}%`;
+        countEl.textContent = `${s.sent} / ${s.total}`;
+      }
+      if (s.current) current.textContent = `→ ${s.current}`;
+    } catch {}
+  }, 1000);
+
   try {
-    const steps = ['Fetching group participants…','Filtering already-messaged contacts…','Sending messages…'];
-    let i = 0;
-    const iv = setInterval(() => { if(i<steps.length) msg.textContent = steps[i++]; }, 2500);
     const res = await fetch(`${API}/send-now`, { method:'POST' }).then(r => r.json());
     clearInterval(iv);
+    bar.style.width = '100%';
     rs.className = 'run-status';
     if (res.ok) {
       showToast(`Sent to ${res.sent} contacts. Skipped ${res.skipped}.`, 'ok');
@@ -879,6 +1089,7 @@ async function launch() {
       showToast(res.error || 'Send failed', 'err');
     }
   } catch(e) {
+    clearInterval(iv);
     rs.className = 'run-status';
     showToast(e.message, 'err');
   } finally {
@@ -912,7 +1123,7 @@ function renderRunLog(runs) {
         ? contacts.map(c => `<span class="contact-chip chip-sent">${esc(formatContact(c))}</span>`).join('')
         : '<span style="color:var(--muted);font-size:13px">None.</span>';
 
-      const reasonLabel = { already_sent: 'already sent', self: 'yourself', error: 'error' };
+      const reasonLabel = { already_sent: 'already sent', self: 'yourself', error: 'error', excluded: 'excluded' };
       const skippedHtml = skippedContacts.length
         ? skippedContacts.map(s => {
             const label = reasonLabel[s.reason] || s.reason;
