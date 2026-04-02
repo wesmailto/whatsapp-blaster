@@ -736,7 +736,13 @@ async function loadParticipants() {
   list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted)"><div class="spinner" style="width:20px;height:20px;border-width:2px;display:inline-block"></div><br><br>Loading participants…</div>';
   try {
     const data = await fetch(`${API}/wa/participants`).then(r => r.json());
-    allParticipants = data.participants || [];
+    allParticipants = (data.participants || []).sort((a, b) => {
+      // Admins first, then by name/phone, excluded last
+      if (a.isAdmin !== b.isAdmin) return a.isAdmin ? -1 : 1;
+      const aLabel = a.name || a.phone || '';
+      const bLabel = b.name || b.phone || '';
+      return aLabel.localeCompare(bLabel);
+    });
     filteredParticipants = allParticipants;
     // Restore exclusions from config
     excludedContacts = new Set(config.excluded_contacts || []);
@@ -763,7 +769,11 @@ function renderParticipants() {
     return `<label style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;transition:background .1s" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
       <input type="checkbox" ${checked} onchange="toggleExclusion('${p.id}')" style="width:15px;height:15px;accent-color:var(--danger);flex-shrink:0" />
       <span style="flex:1;min-width:0;${isExcluded ? 'text-decoration:line-through;color:var(--muted)' : ''}">
-        ${primary}${secondary ? `<span style="display:block;font-size:11px;color:var(--muted)">${secondary}</span>` : ''}
+        <span style="display:flex;align-items:center;gap:5px">
+          ${primary}
+          ${p.isAdmin ? `<span style="font-size:10px;font-weight:600;color:#7c3aed;background:#ede9fe;border-radius:3px;padding:1px 5px;flex-shrink:0">admin</span>` : ''}
+        </span>
+        ${secondary ? `<span style="display:block;font-size:11px;color:var(--muted)">${secondary}</span>` : ''}
       </span>
       <span style="font-size:11px;color:var(--muted);white-space:nowrap;flex-shrink:0">${p.group || ''}</span>
     </label>`;
@@ -794,7 +804,8 @@ function onParticipantSearch() {
           (p.name  && p.name.toLowerCase().includes(q)) ||
           (p.phone && p.phone.includes(q)) ||
           (p.id   || '').toLowerCase().includes(q) ||
-          (p.group || '').toLowerCase().includes(q)
+          (p.group || '').toLowerCase().includes(q) ||
+          (p.isAdmin && 'admin'.includes(q))
         )
       : allParticipants;
     renderParticipants();

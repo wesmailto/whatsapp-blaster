@@ -20,4 +20,8 @@ fi
 echo "🚀 Starting at http://localhost:5050"
 echo "   Press Ctrl+C to stop."
 echo ""
+
+# Open browser after a short delay (gives the server time to start)
+(sleep 2 && open "http://localhost:5050" 2>/dev/null || xdg-open "http://localhost:5050" 2>/dev/null || true) &
+
 node service.js

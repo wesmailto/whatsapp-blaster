@@ -64,13 +64,15 @@ function initWhatsApp() {
     wa.status = 'ready';
     wa.qrDataUrl = null;
     await refreshGroups();
+    fetchContactNames(); // warm up name cache in background
   });
 
   wa.client.on('disconnected', (reason) => {
     console.log('⚠️  WhatsApp disconnected:', reason);
-    wa.status = 'disconnected';
-    wa.groups  = [];
-    wa.client  = null;
+    wa.status       = 'disconnected';
+    wa.groups       = [];
+    wa.contactNames = null;  // clear contact name cache
+    wa.client       = null;
     // Auto-reconnect after 5s
     setTimeout(initWhatsApp, 5000);
   });
@@ -119,6 +121,39 @@ async function refreshGroups(force = false) {
     fetchAndCacheGroups();
   }
   return wa.groups;
+}
+
+// Contact name cache — one getContacts() call instead of one per participant
+wa.contactNames    = null;  // Map<id, name>
+wa.contactNamesAt  = null;
+let contactNamesRefreshing = false;
+
+async function fetchContactNames() {
+  if (contactNamesRefreshing || wa.status !== 'ready') return;
+  contactNamesRefreshing = true;
+  try {
+    const contacts = await wa.client.getContacts();
+    wa.contactNames = new Map(
+      contacts.map(c => [c.id._serialized, c.pushname || c.name || ''])
+    );
+    wa.contactNamesAt = Date.now();
+    console.log(`👤 Contact names cached (${wa.contactNames.size} contacts).`);
+  } catch (e) {
+    console.error('Error fetching contacts:', e.message);
+  } finally {
+    contactNamesRefreshing = false;
+  }
+}
+
+async function getContactName(id) {
+  const now = Date.now();
+  const stale = !wa.contactNamesAt || (now - wa.contactNamesAt) >= CACHE_TTL_MS;
+  if (!wa.contactNames) {
+    await fetchContactNames();          // first call — must wait
+  } else if (stale) {
+    fetchContactNames();                // stale — refresh in background, use cache now
+  }
+  return wa.contactNames?.get(id) || '';
 }
 
 async function getGroupParticipants(groupId) {
@@ -375,17 +410,18 @@ app.get('/api/wa/participants', async (req, res) => {
         const id = p.id._serialized;
         if (!seen.has(id)) {
           seen.add(id);
-          // Try to get display name (pushname) — may be empty for contacts not in your address book
-          let name = '';
-          try {
-            const contact = await wa.client.getContactById(id);
-            name = contact.pushname || contact.name || '';
-          } catch {}
-          participants.push({ id, phone: p.id.user, name, group: gName });
+          participants.push({ id, phone: p.id.user, name: '', group: gName, isAdmin: p.isAdmin || p.isSuperAdmin || false });
         }
       }
     } catch (e) { console.error('Participants error for', gName, e.message); }
   }
+
+  // Resolve all names in one shot from cache (single getContacts() call if not cached)
+  await getContactName('_warm_'); // ensure cache is populated
+  for (const p of participants) {
+    p.name = wa.contactNames?.get(p.id) || '';
+  }
+
   res.json({ participants, total: participants.length });
 });
 
